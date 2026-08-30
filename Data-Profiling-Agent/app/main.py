@@ -1,6 +1,7 @@
 """FastAPI application entry point."""
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
 from app.core.logging import setup_logging
@@ -14,9 +15,17 @@ def create_app() -> FastAPI:
     setup_logging(settings)
 
     app = FastAPI(
-        title="MVA Data Profiling Engine",
+        title="Data Profiling Engine",
         description="Multi-Variance Analysis — Schema, Quality, Hierarchy, Readiness, and Chart Intelligence",
         version="0.1.0",
+    )
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_allowed_origins_list,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
 
     # Register error handlers

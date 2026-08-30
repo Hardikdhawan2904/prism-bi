@@ -1,6 +1,6 @@
 """
 Pipeline route — orchestrates the handoff between Agent 1 (Schema Intelligence Layer)
-and Agent 2 (MVA Data Profiling Engine) via a LangGraph StateGraph (app/agents/orchestration_agent/graph.py).
+and Agent 2 (Data Profiling Engine) via a LangGraph StateGraph (app/agents/orchestration_agent/graph.py).
 Each future agent added to the pipeline becomes another node in that same graph.
 """
 
@@ -13,6 +13,7 @@ from app.agents.orchestration_agent.nodes.pipeline import (
     _agent3_skip_reason, _analyze_via_agent3, _dataset_context_fields, _get_agent2_result, _readiness_and_features,
 )
 from app.config import settings
+from app.services import pipeline_status
 
 router = APIRouter(prefix="/pipeline", tags=["Pipeline"])
 
@@ -49,13 +50,19 @@ async def run_pipeline(
         description="Optional explicit override — if the caller already knows the target column, "
                     "Agent 2 skips LLM target-guessing and uses it directly.",
     ),
+    job_id: str | None = Form(
+        default=None,
+        description="Optional client-generated id (e.g. crypto.randomUUID()) — if supplied, "
+                    "per-stage progress is pollable via GET /pipeline/status/{job_id} while this "
+                    "request is in flight. Purely additive: omitted, behavior is identical to today.",
+    ),
 ):
     """
     Runs a dataset through the full agent pipeline:
 
     1. Agent 1 (Schema Intelligence Layer) — quality gate, metadata extraction,
        LLM column descriptions, business domain classification.
-    2. Agent 2 (MVA Data Profiling Engine) — deep structural profiling, quality/readiness
+    2. Agent 2 (Data Profiling Engine) — deep structural profiling, quality/readiness
        scoring, chart generation. Seeded with Agent 1's column descriptions and its own
        primary_domain, taken directly from Agent 1's classification (business_domain) —
        no domain input is accepted from the caller.
@@ -89,9 +96,14 @@ async def run_pipeline(
     auto-inference can't verify from its own sample, without prompting every
     Swagger UI user for something that's already automatic.
     """
+    if job_id:
+        pipeline_status.start(job_id)
+
     content = await file.read()
     max_bytes = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
     if len(content) > max_bytes:
+        if job_id:
+            pipeline_status.finish(job_id, ok=False, error="File exceeds the maximum upload size.")
         raise HTTPException(
             status_code=413,
             detail=f"File exceeds the maximum upload size of {settings.MAX_UPLOAD_SIZE_MB}MB "
@@ -104,17 +116,38 @@ async def run_pipeline(
     request_rules = form.get("request_rules")
     request_rules = str(request_rules) if request_rules else None
 
-    return await run_orchestrator_pipeline(
-        filename=filename,
-        content_type=content_type,
-        content=content,
-        sheet_name=sheet_name,
-        force_reclassify=force_reclassify,
-        force_revalidate=force_revalidate,
-        business_question=business_question,
-        target_column=target_column,
-        request_rules=request_rules,
-    )
+    try:
+        result = await run_orchestrator_pipeline(
+            filename=filename,
+            content_type=content_type,
+            content=content,
+            sheet_name=sheet_name,
+            force_reclassify=force_reclassify,
+            force_revalidate=force_revalidate,
+            business_question=business_question,
+            target_column=target_column,
+            request_rules=request_rules,
+            job_id=job_id,
+        )
+    except Exception as e:
+        if job_id:
+            pipeline_status.finish(job_id, ok=False, error=str(e))
+        raise
+    if job_id:
+        ok = not isinstance(result, JSONResponse)
+        pipeline_status.finish(job_id, ok=ok, error=None if ok else "Pipeline returned an error response.")
+    return result
+
+
+@router.get("/status/{job_id}")
+async def get_pipeline_status(job_id: str):
+    """Poll a POST /pipeline/run call's real per-stage progress — only
+    meaningful when that call was made with a job_id form field. 404 for
+    an unknown or expired job_id (jobs older than 1 hour are evicted)."""
+    job = pipeline_status.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Unknown or expired job_id.")
+    return job
 
 
 @router.post("/ask")

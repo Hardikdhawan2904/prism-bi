@@ -15,6 +15,7 @@ from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from app.agents.analytics_agent.graph import run_analytics_graph
 from app.config import MAX_UPLOAD_SIZE_MB
 from app.schemas.responses import AnalysisResponse
+from app.services.database import insert_analysis_result
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Analytics"])
@@ -128,6 +129,15 @@ async def analyze(
         charts=parsed_charts,
         full_feature_recommendation=parsed_full_feature_recommendation,
         detected_domain=detected_domain,
+    )
+
+    insert_analysis_result(
+        conversation_id=result.get("conversation_id"),
+        dataset_filename=file.filename,
+        business_question=business_question,
+        intent=result.get("intent"),
+        kpi_name=result.get("kpi_name"),
+        evidence=result.get("evidence"),
     )
 
     return AnalysisResponse(**result)

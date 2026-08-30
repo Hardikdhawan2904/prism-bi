@@ -1,4 +1,4 @@
-"""Custom exceptions for the MVA Data Profiling Engine."""
+"""Custom exceptions for the Data Profiling Engine."""
 
 from typing import Any
 

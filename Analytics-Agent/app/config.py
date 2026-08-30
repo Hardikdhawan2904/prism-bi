@@ -148,7 +148,7 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 # ── Groq LLM Settings ─────────────────────────────────────────────────────────
 # Sourced from ml_config.yml's llm_fallback.model — one source of truth
 # instead of a separately hardcoded string.
-GROQ_MODEL       = LLM_FALLBACK.get("model", "llama-3.3-70b-versatile")
+GROQ_MODEL       = LLM_FALLBACK.get("model", "openai/gpt-oss-120b")
 GROQ_TEMPERATURE = 0.0
 GROQ_MAX_TOKENS  = 1024
 

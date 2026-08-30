@@ -196,3 +196,53 @@ def test_add_turn_survives_db_failure(monkeypatch):
     )  # must not raise
     assert turn_id == 1
     assert len(mm.get_history()) == 1  # still recorded in-process
+
+
+# ── app/services/database.py::insert_analysis_result — reporting capture ────
+
+def test_insert_analysis_result_is_readable_back():
+    cid = str(uuid.uuid4())
+    database.insert_analysis_result(
+        conversation_id=cid,
+        dataset_filename="claims.csv",
+        business_question="What is GWP for FY2025?",
+        intent="show_kpi",
+        kpi_name="gross_written_premium",
+        evidence={"kpi": "Gross Written Premium", "unit": "$", "actual": 4200000.0},
+    )
+
+    conn = psycopg2.connect(
+        host=POSTGRES_HOST, port=POSTGRES_PORT, dbname=POSTGRES_DB,
+        user=POSTGRES_USER, password=POSTGRES_PASSWORD, options="-c search_path=agent3",
+    )
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT dataset_filename, intent, kpi_name, evidence FROM analysis_results WHERE conversation_id = %s", (cid,))
+        row = cur.fetchone()
+    finally:
+        conn.close()
+
+    assert row is not None
+    assert row[0] == "claims.csv"
+    assert row[1] == "show_kpi"
+    assert row[2] == "gross_written_premium"
+
+
+def test_insert_analysis_result_skips_silently_when_evidence_is_none():
+    # No evidence (e.g. "KPI not found") — nothing to report on, must not
+    # raise and must not insert a row.
+    database.insert_analysis_result(
+        conversation_id=str(uuid.uuid4()), dataset_filename="x.csv",
+        business_question="q", intent="show_kpi", kpi_name=None, evidence=None,
+    )
+
+
+def test_insert_analysis_result_survives_db_failure(monkeypatch):
+    def _boom(*args, **kwargs):
+        raise psycopg2.OperationalError("simulated connection failure")
+
+    monkeypatch.setattr(database, "_get_connection", _boom)
+    database.insert_analysis_result(
+        conversation_id=str(uuid.uuid4()), dataset_filename="x.csv",
+        business_question="q", intent="show_kpi", kpi_name="x", evidence={"actual": 1},
+    )  # must not raise

@@ -39,6 +39,17 @@ class Settings(BaseSettings):
 
     LOG_LEVEL: str = "INFO"
 
+    # CORS — comma-separated origin list. Same pattern as
+    # Schema-Intelligence-Layer/app/config.py. Defaults cover both a Vite
+    # dev frontend (5173, the original default) and a Next.js dev frontend
+    # (3000, the PrismBI Frontend/ app) — widen via env for a real deployed
+    # frontend origin.
+    CORS_ALLOWED_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000"
+
+    @property
+    def cors_allowed_origins_list(self) -> list[str]:
+        return [origin.strip() for origin in self.CORS_ALLOWED_ORIGINS.split(",") if origin.strip()]
+
     # Same limit/behavior as Agent 1's own MAX_UPLOAD_SIZE_MB — every
     # upload gets read fully into memory here before being forwarded to
     # Agent 1/2/3, so an unbounded upload is a real memory-exhaustion risk

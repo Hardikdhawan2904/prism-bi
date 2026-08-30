@@ -5,7 +5,7 @@ The single PostgreSQL server used by every agent in the pipeline. One database (
 ```
 mva_pipeline (database)
 ├── agent1  (Schema Intelligence Layer's tables, owned by postgres)
-├── agent2  (MVA Data Profiling Engine's tables, owned by mva_user)
+├── agent2  (Data Profiling Engine's tables, owned by mva_user)
 └── agent3  (Analytics Agent's conversation memory, owned by postgres)
 ```
 
@@ -36,6 +36,26 @@ It won't re-run against an already-initialized instance, and doesn't need to for
 Agent 3's own `init_db()` (`Analytics-Agent/app/services/database.py`) creates its schema/table idempotently at every service startup instead, which is why it doesn't need a dedicated role the way Agent 2 does: `CREATE SCHEMA IF NOT EXISTS` needs no elevated one-time setup, unlike `CREATE USER`.
 
 Every other repo in this pipeline (`Schema-Intelligence-Layer`, `Data-Profiling-Agent`, `Analytics-Agent`) points at this same server — none of them run their own Postgres.
+
+## Reporting layer (Power BI)
+
+[`reporting_views.sql`](./reporting_views.sql) creates a `reporting` schema of
+read-only views flattening each agent's tables into report-friendly shape —
+quality gate results, domain classifications, AI-readiness scores, rule
+approvals, and (once `Analytics-Agent` has served at least one `/analyze`
+call) KPI lookups, forecasts, and anomalies. Views only, nothing written back
+— safe to re-run any time:
+
+```powershell
+$env:PGPASSWORD = "postgres"
+& "$pgBin\psql.exe" -h localhost -p 5433 -U postgres -d mva_pipeline -f "..\Shared-Postgres\reporting_views.sql"
+```
+
+Point Power BI's PostgreSQL connector at `localhost:5433` / `mva_pipeline`
+and import only the `reporting` schema. See the file's header comment for
+known limitations (no shared run_id across agents — join on filename
+instead; a few fields Agent 1/2 never persist, like domain-classification
+confidence).
 
 ## Connection details
 

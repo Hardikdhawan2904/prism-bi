@@ -1,6 +1,6 @@
-# MVA Data Profiling Engine
+# Data Profiling Engine
 
-**Multi-Variance Analysis — Schema, Quality, Hierarchy, Readiness, and Chart Intelligence**
+**Schema, Quality, Hierarchy, Readiness, and Chart Intelligence**
 
 A production-structured backend that profiles CSV/XLSX datasets, classifies them into domains, validates hierarchy structures, assesses data quality, evaluates AI-readiness, and generates typed chart specifications.
 

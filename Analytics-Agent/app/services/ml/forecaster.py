@@ -45,6 +45,7 @@ class ProphetForecaster:
         freq: str = "ME",
         yearly_seasonality: bool = True,
         quarterly_seasonality: bool = True,
+        seasonality_mode: str = "additive",
     ) -> dict:
         """
         Fit Prophet to historical time series and generate forecast.
@@ -54,8 +55,22 @@ class ProphetForecaster:
                          'ds' can be string or datetime; 'y' is numeric.
             periods    : Number of future periods to forecast (months).
             freq       : Pandas frequency string ('ME' = month-end).
-            yearly_seasonality  : Add yearly seasonality component.
-            quarterly_seasonality : Add quarterly seasonality (insurance peak).
+            yearly_seasonality  : Add yearly seasonality component, if there's
+                                  enough history to fit it reliably (below).
+            quarterly_seasonality : Add quarterly seasonality (insurance peak),
+                                  same data-sufficiency guard as above.
+            seasonality_mode : "additive" (default) or "multiplicative".
+                                Multiplicative assumes y stays strictly
+                                positive and scales seasonal swings with the
+                                trend level (Prophet's own documented
+                                requirement) — on a domain-agnostic metric
+                                that can dip near zero or negative (a KPI
+                                variance, a bad quarter), it destabilizes:
+                                trend * (1 + seasonal) can flip sign and
+                                oscillate wildly once a genuine shock pushes
+                                the trend down. Only pass "multiplicative"
+                                for a metric verified to be strictly
+                                positive and multiplicatively seasonal.
 
         Returns:
             {
@@ -82,18 +97,38 @@ class ProphetForecaster:
                 "error": f"Insufficient data for Prophet. Need >= 6 periods, got {len(df)}."
             }
 
+        # A seasonal component needs enough real calendar history to fit
+        # reliably, or its Fourier terms overfit a single shock as if it
+        # were a recurring pattern — exactly what produced wildly
+        # oscillating (e.g. -600K then +600K the next month) forecasts on
+        # 24 months (~2 years) of data with one sharp outlier. A row-count
+        # floor isn't the right guard here since freq can be daily/weekly,
+        # not just monthly — measured empirically (see test_forecaster.py):
+        # yearly seasonality stayed unstable through 24 and 30 months of
+        # history and only settled down at 36 (~3 years); quarterly's much
+        # shorter cycle (91.25 days) was already stable at 24 months.
+        span_days = (df["ds"].max() - df["ds"].min()).days
+        _MIN_DAYS_FOR_YEARLY = 3 * 365
+        _MIN_DAYS_FOR_QUARTERLY = 365
+        effective_yearly = yearly_seasonality and span_days >= _MIN_DAYS_FOR_YEARLY
+        effective_quarterly = quarterly_seasonality and span_days >= _MIN_DAYS_FOR_QUARTERLY
+        if yearly_seasonality and not effective_yearly:
+            logger.info(f"Prophet: disabling yearly seasonality — only {span_days} days of history, need >= {_MIN_DAYS_FOR_YEARLY}.")
+        if quarterly_seasonality and not effective_quarterly:
+            logger.info(f"Prophet: disabling quarterly seasonality — only {span_days} days of history, need >= {_MIN_DAYS_FOR_QUARTERLY}.")
+
         logger.info(f"Prophet: fitting on {len(df)} historical periods, "
                     f"forecasting {periods} periods ahead")
 
         model = Prophet(
-            yearly_seasonality=yearly_seasonality,
+            yearly_seasonality=effective_yearly,
             weekly_seasonality=False,
             daily_seasonality=False,
             uncertainty_samples=1000,
-            seasonality_mode="multiplicative",
+            seasonality_mode=seasonality_mode,
         )
 
-        if quarterly_seasonality:
+        if effective_quarterly:
             model.add_seasonality(
                 name="quarterly",
                 period=91.25,

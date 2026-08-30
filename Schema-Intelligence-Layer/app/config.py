@@ -23,7 +23,7 @@ class Settings(BaseSettings):
 
     # Groq API configuration
     GROQ_API_KEY: str = ""
-    GROQ_MODEL: str = "llama-3.1-8b-instant"
+    GROQ_MODEL: str = "openai/gpt-oss-20b"
 
     # Database configuration
     POSTGRES_HOST: str = "localhost"

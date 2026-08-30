@@ -1,4 +1,4 @@
-# MVA — Multi-Agent Data Pipeline
+# PrismBI — Multi-Agent Data Pipeline
 
 **One system** that ingests a CSV/Excel dataset and takes it end-to-end: quality gating, schema classification, structural profiling, hierarchy inference, business-rule validation, AI-readiness scoring, chart generation, and AI-proposed rule suggestions with a human approve/reject loop.
 
@@ -6,44 +6,42 @@ Internally it's organized as four cooperating services plus a shared database �
 
 ## Architecture
 
-```
-                     ┌──────────────────────────────────────┐
-   Upload ─────────▶ │  Agent Orchestrator                    │
-                     │  Stage 0A: Dataset Registry (fingerprint│
-                     │  the upload; a duplicate short-circuits │
-                     │  straight to Agent 3, skipping 1 + 2)   │
-                     └─────────┬──────────────────────────────┘
-                               │ (new content, new version, or
-                               │  force_revalidate)
-              ┌────────────────┴────────────────┐
-              ▼                                  ▼
-   ┌─────────────────────┐          ┌─────────────────────────┐
-   │  Agent 1             │          │  Agent 2                │
-   │  Schema Intelligence  │ ───────▶ │  MVA Data Profiling      │
-   │  Layer                │  domain  │  Engine                  │
-   │  (quality gate,       │  +      │  (profiling, quality,    │
-   │  classification,      │  column │  hierarchy, readiness,   │
-   │  column descriptions) │  descrs │  charts, rule suggestions)│
-   └──────────┬───────────┘          └────────────┬─────────────┘
-              │                                    │
-              └──────────────┬─────────────────────┘
-                              ▼
-                   ┌─────────────────────┐
-                   │   Shared Postgres    │
-                   │  (agent1 / agent2    │
-                   │   schemas, one DB)   │
-                   └──────────┬──────────┘
-                              │ (.csv upload +
-                              │  business_question only)
-                              ▼
-                   ┌─────────────────────┐
-                   │  Agent 3 (optional)  │
-                   │  Analytics Agent     │
-                   │  FastAPI + LangGraph │
-                   └─────────────────────┘
+```mermaid
+flowchart TD
+    Upload(["Upload: CSV / XLSX"]) --> Orch["Agent Orchestrator :8002"]
+    Orch --> Registry{{"Stage 0A: Dataset Registry\nSHA-256 fingerprint check"}}
+
+    Registry -- "duplicate content, already validated\n(cached, skips Agent 1 + 2)" --> Agent3Gate
+    Registry -- "new content, new version,\nor force_revalidate" --> Agent1
+
+    Agent1["Agent 1 — Schema Intelligence Layer :8000\n10-check quality gate + LLM domain classification\n+ column descriptions"]
+    Agent1 -- "fails quality gate" --> Reject(["422 — stop here"])
+    Agent1 -- "PASS + business_domain" --> Agent2
+
+    Agent2["Agent 2 — Data Profiling Engine :8001\nstructural profiling, hierarchy inference,\nbusiness-rule evaluation, readiness scoring,\nchart generation"]
+    Agent2 -- "up to 5 candidate rules\nper run" --> Human{{"Human review\n(approve / reject)"}}
+    Human -- "approved" --> RuleStore[["Rule applies automatically\nto every future upload in that domain"]]
+    RuleStore -.-> Agent2
+
+    Agent1 -- writes --> PG1[("agent1 schema\ndataset_metadata")]
+    Agent2 -- writes --> PG2[("agent2 schema\nprofile_runs, readiness,\nrule_suggestions, ...")]
+
+    Agent3Gate{{"business_question given\nAND file is .csv ?"}}
+    Agent2 --> Agent3Gate
+    Agent3Gate -- "yes" --> Agent3["Agent 3 — Analytics Agent :8003 (optional)\nFastAPI + LangGraph: KPI discovery, forecast,\nanomaly detection, root-cause, LLM narration"]
+    Agent3Gate -- "no" --> Response
+    Agent3 -- "writes evidence\n(this run's addition)" --> PG3[("agent3 schema\nanalysis_results, conversation_turns")]
+    Agent3 --> Response(["Combined response:\nagent1 + agent2 + agent3"])
+
+    PG1 -.-> Views
+    PG2 -.-> Views
+    PG3 -.-> Views
+    Views[["reporting schema — 7 read-only views\njoined on filename, not run_id\n(no shared run_id exists across agents)"]] --> PowerBI(["Power BI report"])
 ```
 
 Each service runs as its own FastAPI process (so they can be started, stopped, and observed independently), but they share one virtual environment, one dependency list, and one repo history. The orchestrator is the only thing that chains them together — Agent 3 included, called over HTTP exactly like Agent 1/2. See "Agent 3 — Analytics Agent" below.
+
+The reporting layer at the bottom (`Shared-Postgres/reporting_views.sql`) is read-only and additive — it queries what the three agents already persisted, on its own schedule, independent of the live request/response path above. Because Agent 1 keys by filename (one row per dataset name, updated in place on re-upload) while Agent 2 and Agent 3 generate a fresh run id every time, there's no single `run_id` that joins all three agents' rows — the views join on filename instead, which is exact for Agent 2 ↔ Agent 3 but approximate wherever Agent 1 is involved.
 
 ## What's inside
 

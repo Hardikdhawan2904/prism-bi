@@ -30,10 +30,23 @@ class Settings(BaseSettings):
     # LLM Provider
     llm_provider: str = Field(default="groq", alias="LLM_PROVIDER")
     llm_api_key: str = Field(default="", alias="LLM_API_KEY")
-    llm_model: str = Field(default="llama-3.3-70b-versatile", alias="LLM_MODEL")
+    llm_model: str = Field(default="openai/gpt-oss-120b", alias="LLM_MODEL")
     llm_timeout_seconds: int = Field(default=30, alias="LLM_TIMEOUT_SECONDS")
     llm_max_retries: int = Field(default=2, alias="LLM_MAX_RETRIES")
     llm_burst_cooldown_seconds: float = Field(default=5.0, alias="LLM_BURST_COOLDOWN_SECONDS")
+
+    # CORS — comma-separated origin list. No CORS middleware existed here
+    # before the PrismBI Frontend/ app needed to call /rule-suggestions/*
+    # directly from the browser (approve/reject) — same pattern as
+    # Schema-Intelligence-Layer/app/config.py and Agent-Orchestrator/app/config.py.
+    cors_allowed_origins: str = Field(
+        default="http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000",
+        alias="CORS_ALLOWED_ORIGINS",
+    )
+
+    @property
+    def cors_allowed_origins_list(self) -> list[str]:
+        return [origin.strip() for origin in self.cors_allowed_origins.split(",") if origin.strip()]
 
     # Logging
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")

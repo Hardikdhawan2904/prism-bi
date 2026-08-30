@@ -48,6 +48,7 @@ from langgraph.graph import StateGraph, END
 from app.agents.orchestration_agent.config import get_entry_point
 from app.agents.orchestration_agent.state import PipelineState
 from app.agents.orchestration_agent.nodes.pipeline import OrchestratorGraphNodes
+from app.services import pipeline_status
 
 _nodes = OrchestratorGraphNodes()
 
@@ -109,6 +110,7 @@ async def run_orchestrator_pipeline(
     business_question: str | None = None,
     target_column: str | None = None,
     request_rules: str | None = None,
+    job_id: str | None = None,
 ) -> dict[str, Any] | JSONResponse:
     """Execute the orchestrator graph. Returns the success dict
     ({"agent1", "agent2", "agent3", "primary_domain_used"}) on completion —
@@ -127,6 +129,12 @@ async def run_orchestrator_pipeline(
     quality, actively eroding trust rather than helping. Left as an
     explicit, caller-supplied opt-in rather than another auto-inferred
     default.
+
+    job_id: optional — when supplied, per-node progress is recorded via
+    app.services.pipeline_status as the graph runs, pollable via
+    GET /pipeline/status/{job_id}. Omitted entirely, this function's
+    behavior and return value are unchanged (e.g. /pipeline/ask never
+    passes one).
     """
     initial_state: PipelineState = {
         "filename": filename,
@@ -140,7 +148,18 @@ async def run_orchestrator_pipeline(
         "request_rules": request_rules,
     }
 
-    final_state = await _graph.ainvoke(initial_state, config={"recursion_limit": 25})
+    # .astream(..., stream_mode="updates") instead of .ainvoke() — one
+    # {node_name: partial_state_update} chunk per completed node, in order,
+    # giving real per-stage progress for free without touching any node's
+    # internal logic. Same pattern Analytics-Agent's own graph.py already
+    # uses for per-node timing (run_analytics_graph).
+    final_state: dict[str, Any] = dict(initial_state)
+    async for chunk in _graph.astream(initial_state, config={"recursion_limit": 25}, stream_mode="updates"):
+        for node_name, partial_update in chunk.items():
+            if partial_update:  # a node may legitimately return None ("no state change")
+                final_state.update(partial_update)
+            if job_id:
+                pipeline_status.mark_stage(job_id, node_name)
 
     if final_state.get("error_content") is not None:
         return JSONResponse(

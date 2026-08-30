@@ -1,6 +1,6 @@
 # Agent Orchestrator
 
-Coordinates the multi-agent data pipeline: uploads a dataset once, sends it through **Agent 1 (Schema Intelligence Layer)** for classification and quality gating, then feeds Agent 1's output into **Agent 2 (MVA Data Profiling Engine)** for deep profiling — and, when the upload is a CSV with a business question attached, forwards it on to **Agent 3 (Analytics Agent)** to answer that question, for any of Agent 2's 5 supported domains. Returns all results together in a single response.
+Coordinates the multi-agent data pipeline: uploads a dataset once, sends it through **Agent 1 (Schema Intelligence Layer)** for classification and quality gating, then feeds Agent 1's output into **Agent 2 (Data Profiling Engine)** for deep profiling — and, when the upload is a CSV with a business question attached, forwards it on to **Agent 3 (Analytics Agent)** to answer that question, for any of Agent 2's 5 supported domains. Returns all results together in a single response.
 
 Expressed as a LangGraph `StateGraph` (`app/agents/orchestration_agent/`) rather than a chain of early returns — mostly sequential HTTP calls with conditional stop-on-error edges (no LLM calls or tools of its own), plus one best-effort optional stage for Agent 3. Each future agent added to the pipeline becomes another node in the same graph.
 

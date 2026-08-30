@@ -4,14 +4,14 @@
       "algorithm": "LightGBM",
       "target": "revenue",
       "r2": 0.5453495361627355,
-      "timestamp": "2026-07-30T07:24:31.094057"
+      "timestamp": "2026-08-30T18:58:29.799536"
     },
     "isolation_forest": {
       "algorithm": "IsolationForest",
-      "anomaly_count": 50,
-      "total_records": 1000,
+      "anomaly_count": 2,
+      "total_records": 24,
       "contamination": 0.05,
-      "timestamp": "2026-07-30T07:24:27.510397"
+      "timestamp": "2026-08-30T18:48:23.161284"
     },
     "xgboost_classifier": {
       "algorithm": "XGBoost",
@@ -44,7 +44,7 @@
     "prophet_forecast": {
       "algorithm": "Prophet",
       "periods": 6,
-      "timestamp": "2026-07-30T07:24:37.533569"
+      "timestamp": "2026-08-30T18:58:26.006792"
     }
   }
 }

@@ -534,6 +534,27 @@ def run_analytics_graph(
             "llm_readiness_score_used": llm_readiness_score,
             "execution_trace": trace,
             "execution_summary": summary,
+            # Extra keys beyond AnalysisResponse's declared fields — dropped
+            # by AnalysisResponse(**result) in routes/analyze.py, read only
+            # by that route's reporting-persistence call (see database.py::
+            # insert_analysis_result). Not part of the HTTP contract.
+            #
+            # evidence_builder.to_narration_context() rather than the bare
+            # final_state["evidence"] adapter field — that field is only
+            # ever set on the single-scheduled-analysis path (see state.py's
+            # comment on it); a "report" query (multiple analyses scheduled,
+            # the common case for a generic/unresolved business_question)
+            # leaves it None, which silently dropped every such call from
+            # the reporting views. to_narration_context() covers both: it's
+            # byte-identical to final_state["evidence"] for the single-
+            # analysis case, and {"analyses": {type: evidence, ...}} for
+            # report mode.
+            "intent": final_state.get("intent"),
+            "kpi_name": final_state.get("kpi_name"),
+            "evidence": (
+                final_state["evidence_builder"].to_narration_context()
+                if final_state.get("evidence_builder") else None
+            ),
         }
     except Exception as e:
         # Full exception (including traceback, which can contain internal

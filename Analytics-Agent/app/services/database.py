@@ -61,6 +61,31 @@ ORDER BY turn_id DESC
 LIMIT %s;
 """
 
+# Raw capture of one /analyze call's structured output, for the Power BI
+# reporting layer (Shared-Postgres/reporting_views.sql). `evidence` is kept
+# as opaque JSONB rather than typed columns because its shape varies by
+# analyzer/algorithm (KPI lookup vs. Prophet/Moving-Average/Linear-Trend
+# forecast vs. IsolationForest anomaly output) — the reporting views do the
+# shape-specific extraction instead.
+CREATE_ANALYSIS_RESULTS_SQL = """
+CREATE TABLE IF NOT EXISTS analysis_results (
+    id SERIAL PRIMARY KEY,
+    conversation_id TEXT,
+    dataset_filename TEXT,
+    business_question TEXT,
+    intent TEXT,
+    kpi_name TEXT,
+    evidence JSONB,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+"""
+
+INSERT_ANALYSIS_RESULT_SQL = """
+INSERT INTO analysis_results (
+    conversation_id, dataset_filename, business_question, intent, kpi_name, evidence
+) VALUES (%s, %s, %s, %s, %s, %s);
+"""
+
 
 def _get_connection() -> psycopg2.extensions.connection:
     """Create a new PostgreSQL connection scoped to the agent3 schema."""
@@ -85,6 +110,7 @@ def init_db() -> None:
         cur.execute("CREATE SCHEMA IF NOT EXISTS agent3")
         cur.execute(CREATE_TABLE_SQL)
         cur.execute(CREATE_INDEX_SQL)
+        cur.execute(CREATE_ANALYSIS_RESULTS_SQL)
         conn.commit()
         cur.close()
         conn.close()
@@ -144,3 +170,33 @@ def load_turns(conversation_id: str, limit: int) -> list[dict[str, Any]]:
             "timestamp": row["created_at"].isoformat(),
         })
     return turns
+
+
+def insert_analysis_result(
+    conversation_id: str,
+    dataset_filename: str,
+    business_question: str,
+    intent: str | None,
+    kpi_name: str | None,
+    evidence: dict[str, Any] | None,
+) -> None:
+    """Persist one /analyze call's structured output for the Power BI
+    reporting layer. Never raises — same "enhancement, not core" philosophy
+    as init_db() above: a reporting-persistence failure must never turn a
+    successful analysis into a 500 for the caller."""
+    if not evidence:  # None, or {} from an empty EvidenceBuilder — nothing to report
+        return
+    try:
+        conn = _get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(INSERT_ANALYSIS_RESULT_SQL, (
+                conversation_id, dataset_filename, business_question,
+                intent, kpi_name, json.dumps(evidence, default=str),
+            ))
+            conn.commit()
+            cur.close()
+        finally:
+            conn.close()
+    except Exception as e:
+        logger.warning(f"Failed to persist analysis_result — reporting views will miss this row: {e}")

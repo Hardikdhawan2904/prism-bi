@@ -1,4 +1,4 @@
-# MVA Pipeline — API Reference
+# PrismBI Pipeline — API Reference
 
 Four services — two data-intake agents, an orchestrator, and one optional analytics Q&A agent — each a separate FastAPI process with its own Swagger UI, sharing one venv and one dependency list. This doc lists every real endpoint, what it's for, and how to open each service's interactive docs locally.
 
