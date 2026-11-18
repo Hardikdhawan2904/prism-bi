@@ -38,6 +38,17 @@ export interface Agent2Result {
   run_id: string;
   status?: string;
   readiness?: Record<string, unknown>;
+  readiness_assessments?: ReadinessAssessment[];
+  [key: string]: unknown;
+}
+
+// Agent 2's ReadinessEngine output — score is 0–100; strengths/blocking_issues
+// are {code, value} items.
+export interface ReadinessAssessment {
+  assessment_type: string;
+  score: number;
+  strengths?: { code: string; value?: unknown }[];
+  blocking_issues?: { code: string; value?: unknown }[];
   [key: string]: unknown;
 }
 

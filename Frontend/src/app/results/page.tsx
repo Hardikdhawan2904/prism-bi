@@ -6,6 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { ChatBubble } from "@/components/ChatBubble";
+import { Markdown } from "@/components/Markdown";
 import type { PipelineRunResponse } from "@/types";
 
 export default function ResultsPage() {
@@ -99,7 +101,9 @@ export default function ResultsPage() {
             </Alert>
           ) : (
             <div className="flex flex-col gap-4">
-              <pre className="whitespace-pre-wrap font-sans text-sm">{agent3.response}</pre>
+              <ChatBubble role="assistant">
+                <Markdown content={agent3.response ?? ""} />
+              </ChatBubble>
               {agent3.execution_trace && (
                 <div>
                   <Button variant="outline" size="sm" onClick={() => setTraceOpen((v) => !v)}>
