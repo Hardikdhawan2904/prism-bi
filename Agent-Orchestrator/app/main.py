@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.routes.datasets import router as datasets_router
 from app.routes.pipeline import router as pipeline_router
+from app.routes.reporting import router as reporting_router
 from app.services.dataset_registry import metadata_cache
 
 logging.basicConfig(
@@ -56,10 +57,16 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # Chrome's Private Network Access policy blocks a public HTTPS origin
+    # (the deployed Vercel frontend) from calling a private-network address
+    # (this service, on 127.0.0.1) unless the preflight response opts in —
+    # a separate browser policy layered on top of standard CORS.
+    allow_private_network=True,
 )
 
 app.include_router(pipeline_router)
 app.include_router(datasets_router)
+app.include_router(reporting_router)
 
 
 async def _ping(client: httpx.AsyncClient, name: str, url: str) -> dict:

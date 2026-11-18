@@ -38,7 +38,7 @@ export default function LandingPage() {
         <div className="flex gap-3 pt-2">
           <Button asChild size="lg">
             <Link href="/run">
-              Run the pipeline <ArrowRight className="ml-2 h-4 w-4" />
+              Open the assistant <ArrowRight className="ml-2 h-4 w-4" />
             </Link>
           </Button>
           <Button asChild size="lg" variant="outline">

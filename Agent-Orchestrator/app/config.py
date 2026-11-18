@@ -44,7 +44,10 @@ class Settings(BaseSettings):
     # dev frontend (5173, the original default) and a Next.js dev frontend
     # (3000, the PrismBI Frontend/ app) — widen via env for a real deployed
     # frontend origin.
-    CORS_ALLOWED_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000"
+    CORS_ALLOWED_ORIGINS: str = (
+        "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000,"
+        "https://prism-bi.vercel.app"
+    )
 
     @property
     def cors_allowed_origins_list(self) -> list[str]:

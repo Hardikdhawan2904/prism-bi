@@ -18,19 +18,21 @@ const STAGES: { key: string; label: string }[] = [
 
 export function Stepper({
   stagesCompleted,
-  currentStage,
   status,
 }: {
   stagesCompleted: string[];
-  currentStage: string | null;
   status: "running" | "done" | "error";
 }) {
+  // The status API reports finished stages only, so the one in progress (or
+  // the one that failed) is the stage after the furthest completed one.
+  const activeIdx = Math.max(-1, ...stagesCompleted.map((k) => STAGES.findIndex((s) => s.key === k))) + 1;
+
   return (
     <ol className="flex flex-col gap-3">
-      {STAGES.map((stage) => {
+      {STAGES.map((stage, i) => {
         const isDone = stagesCompleted.includes(stage.key);
-        const isCurrent = stage.key === currentStage && status === "running";
-        const isFailedHere = stage.key === currentStage && status === "error";
+        const isCurrent = i === activeIdx && status === "running";
+        const isFailedHere = i === activeIdx && status === "error";
 
         return (
           <li key={stage.key} className="flex items-center gap-3">
