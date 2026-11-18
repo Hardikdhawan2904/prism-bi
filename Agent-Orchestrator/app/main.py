@@ -9,7 +9,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.routes.datasets import router as datasets_router
 from app.routes.pipeline import router as pipeline_router
-from app.routes.reporting import router as reporting_router
 from app.services.dataset_registry import metadata_cache
 
 logging.basicConfig(
@@ -66,7 +65,6 @@ app.add_middleware(
 
 app.include_router(pipeline_router)
 app.include_router(datasets_router)
-app.include_router(reporting_router)
 
 
 async def _ping(client: httpx.AsyncClient, name: str, url: str) -> dict:
